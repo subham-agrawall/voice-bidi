@@ -11,6 +11,6 @@ model = NovaSonic(model="amazon.nova-2-sonic-v1:0")
 agent = Agent(
     name="google_search_agent",
     model=model,
-    # tools=[google_search],
+    tools=[google_search],
     instruction="You are a helpful assistant that can search the web.",
 )
