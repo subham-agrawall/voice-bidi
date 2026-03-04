@@ -18,7 +18,7 @@ from google.genai import types
 
 # Import agent after loading environment variables
 # pylint: disable=wrong-import-position
-from .google_search_agent.agent import agent  # noqa: E402
+from .weather_agent.agent import agent  # noqa: E402
 
 # Configure logging — write to file for review
 _log_file = Path(__file__).parent.parent / "debug.log"

@@ -1,3 +1,13 @@
+
+# Quick Start
+
+To start the server:
+
+```bash
+uv run uvicorn app.main:app
+```
+
+
 # ADK Bidi-streaming Demo
 
 A working demonstration of real-time bidirectional streaming with Google's Agent Development Kit (ADK). This FastAPI application showcases WebSocket-based communication with Gemini models, supporting multimodal requests (text, audio, and image/video input) and flexible responses (text or audio output).
