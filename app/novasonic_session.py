@@ -159,14 +159,22 @@ class NovaSonicSession:
         tool_config = []
         if hasattr(self.config, "tools") and self.config.tools:
             for tool in self.config.tools:
+                
+                # Hardcoded for FunctionTool only for now
+                # TBD: handle other tool types
+                tool = tool.function_declarations[0]
+                
                 tool_json = {
-                    "toolSpec" : {
+                    "toolSpec": {
                         "name": tool.name,
                         "description": tool.description,
-                        "inputSchema": tool.function_declarations[0].parameters_json_schema,
+                        "inputSchema": {
+                            "json": tool.parameters.model_dump_json(exclude_none=True),
+                        },
                     }
                 }
                 tool_config.append(tool_json)
+
         if tool_config:
             prompt_body["toolUseOutputConfiguration"] = {"mediaType": "application/json"}
             prompt_body["toolConfiguration"] = {"tools": tool_config}
@@ -303,7 +311,7 @@ class NovaSonicSession:
         })
         await self.send_event(text_event)
 
-    async def end_text_input(self, content_name: str):
+    async def end_text_and_tool_input(self, content_name: str):
         """End the text input content stream."""
         text_content_end = json.dumps({
             "event": {
@@ -314,6 +322,53 @@ class NovaSonicSession:
             }
         })
         await self.send_event(text_content_end)
+
+    async def start_tool_input(self, content_name: str, tool_use_id: str):
+        """Start a tool input content stream.
+        
+        Args:
+            content_name: Content name for this tool stream.
+            tool_use_id: The ID of the tool use.
+        """
+        tool_content_start = {
+            "event": {
+                "contentStart": {
+                    "promptName": self.prompt_name,
+                    "contentName": content_name,
+                    "interactive": False,
+                    "type": "TOOL",
+                    "role": "TOOL",
+                    "toolResultInputConfiguration": {
+                        "toolUseId": tool_use_id,
+                        "type": "TEXT",
+                        "textInputConfiguration": {
+                            "mediaType": "text/plain"
+                        }
+                    }
+                }
+            }
+        }
+        await self.send_event(json.dumps(tool_content_start))
+
+    async def send_tool_input(self, tool_result: str, content_name: str):
+        """Send tool input to the model.
+        
+        Args:
+            tool_result: The tool result content to send to the model.
+        """
+        if not self.is_active:
+            return
+        
+        tool_event = json.dumps({
+            "event": {
+                "toolResult": {
+                    "promptName": self.prompt_name,
+                    "contentName": content_name,
+                    "content": tool_result,
+                }
+            }
+        })
+        await self.send_event(tool_event)
 
     async def end_session(self):
         if not self.is_active:

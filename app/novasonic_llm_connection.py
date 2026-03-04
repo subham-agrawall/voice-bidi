@@ -49,6 +49,7 @@ class NovaSonicLlmConnection(BaseLlmConnection):
             'USER': 'user',
             'ASSISTANT': 'model',
             'SYSTEM': 'system',
+            'TOOL': 'model',
         }
 
     def _is_control_text(self, text: str) -> bool:
@@ -99,7 +100,7 @@ class NovaSonicLlmConnection(BaseLlmConnection):
                 content_name = str(uuid4())
                 await self._ns.start_text_input(content_name=content_name, role=role)
                 await self._ns.send_text_input(text, content_name=content_name)
-                await self._ns.end_text_input(content_name=content_name)
+                await self._ns.end_text_and_tool_input(content_name=content_name)
                 logger.debug('Sent history content with role %s (Nova: %s): %s', content.role, role, text)
         else:
             logger.info('no content is sent')
@@ -114,13 +115,29 @@ class NovaSonicLlmConnection(BaseLlmConnection):
         """
         assert content.parts
         logger.debug('Sending LLM new content %s', content)
-
+        
         content_name = str(uuid4())
-        role = self.role_mapping.get(content.role)
-        text = ''.join(part.text for part in content.parts)
-        await self._ns.start_text_input(content_name=content_name, role=role)
-        await self._ns.send_text_input(text, content_name=content_name)
-        await self._ns.end_text_input(content_name=content_name)
+        if content.parts[0].function_response:
+            # Simplicity: consider one function response
+            # TBD: extend to multiple function responses if needed
+            function_response = content.parts[0].function_response
+            logger.debug('Sending LLM function response: %s', function_response)
+            await self._ns.start_tool_input(
+                content_name=content_name,
+                tool_use_id=function_response.id,
+            )
+            await self._ns.send_tool_input(
+                tool_result=json.dumps(function_response.response),
+                content_name=content_name,
+            )
+            await self._ns.end_text_and_tool_input(content_name=content_name)
+        else:
+            # Text part
+            role = self.role_mapping.get(content.role)
+            text = ''.join(part.text for part in content.parts)
+            await self._ns.start_text_input(content_name=content_name, role=role)
+            await self._ns.send_text_input(text, content_name=content_name)
+            await self._ns.end_text_and_tool_input(content_name=content_name)
 
     async def send_realtime(self, input: RealtimeInput):
         """Sends a chunk of audio or activity signal to the model in realtime.
@@ -229,8 +246,7 @@ class NovaSonicLlmConnection(BaseLlmConnection):
                 # filter SPECULATIVE content for TEXT type
                 if content_type=="TEXT":
                     additional_fields = event_cs.get("additionalModelFields")
-                    if isinstance(additional_fields, str):
-                        additional_fields = json.loads(additional_fields)
+                    additional_fields = json.loads(additional_fields)
                     generative_stage = additional_fields.get("generationStage")
                     if generative_stage == "SPECULATIVE":
                         logger.debug('Skipping content for speculative generation stage with content id: %s', content_id)
@@ -310,7 +326,6 @@ class NovaSonicLlmConnection(BaseLlmConnection):
                     'Content end: contentId=%s, type=%s, role=%s, stopReason=%s',
                     content_id, content_type, content_role, stop_reason,
                 )
-
                 
                 if content_type == "TEXT":
                     # Flush input transcription for USER text
@@ -346,6 +361,17 @@ class NovaSonicLlmConnection(BaseLlmConnection):
                 # Remove from active contents tracking
                 self._active_contents.pop(content_id, None)
                 continue
+            
+            # Handle tool calls
+            # TBD: Handle multiple tool calls
+            if "toolUse" in event:
+                logger.debug('Tool use event from model: %s', event["toolUse"])
+                function_call = types.FunctionCall(
+                    id=event["toolUse"].get("toolUseId"),
+                    name=event["toolUse"].get("toolName"),
+                    args=json.loads(event["toolUse"].get("content")),
+                )
+                yield LlmResponse(content=types.Content(role='model', parts=[types.Part(function_call=function_call)]))
 
             # Handle completionEnd
             if "completionEnd" in event:
