@@ -92,9 +92,17 @@ class NovaSonicSession:
 
     async def send_event(self, event_json: str):
         from aws_sdk_bedrock_runtime.models import InvokeModelWithBidirectionalStreamInputChunk, BidirectionalInputPayloadPart
+        # Skip INFO-level logging for raw audio input events to reduce noise.
+        if '"audioInput"' in event_json:
+            logger.debug("Skipping INFO log for outgoing audioInput event")
+        else:
+            logger.info("Outgoing event: %s", event_json)
+
+        payload_bytes = event_json.encode("utf-8")
+        logger.debug("Outgoing event bytes: %d", len(payload_bytes))
 
         event = InvokeModelWithBidirectionalStreamInputChunk(
-            value=BidirectionalInputPayloadPart(bytes_=event_json.encode("utf-8"))
+            value=BidirectionalInputPayloadPart(bytes_=payload_bytes)
         )
         await self.stream.input_stream.send(event)
 
