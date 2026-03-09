@@ -29,8 +29,8 @@ logging.basicConfig(
     filemode="w",          # overwrite each run so the file stays manageable
 )
 # App and ADK loggers at DEBUG
-logging.getLogger("app").setLevel(logging.DEBUG)
-logging.getLogger("google_adk").setLevel(logging.DEBUG)
+logging.getLogger("app").setLevel(logging.INFO)
+# logging.getLogger("google_adk").setLevel(logging.DEBUG)
 logger = logging.getLogger(__name__)
 logger.info("Logging to %s", _log_file)
 
