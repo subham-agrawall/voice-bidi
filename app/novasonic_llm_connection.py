@@ -22,7 +22,6 @@ logger = logging.getLogger(__name__)
 
 RealtimeInput = Union[types.Blob, types.ActivityStart, types.ActivityEnd]
 
-
 class NovaSonicLlmConnection(BaseLlmConnection):
     """Thin wrapper around NovaSonicSession to implement BaseLlmConnection.
 
@@ -33,8 +32,6 @@ class NovaSonicLlmConnection(BaseLlmConnection):
 
     def __init__(self, ns_client: NovaSonicSession):
         self._ns = ns_client
-        self._input_transcription_text: str = ''
-        self._output_transcription_text: str = ''
         self._current_completion_id: str | None = None
         self._audio_input_content_open: bool = False
         
@@ -206,7 +203,8 @@ class NovaSonicLlmConnection(BaseLlmConnection):
             response_data = result.value.bytes_.decode('utf-8')
             json_data = json.loads(response_data)
             event = json_data.get("event", {})
-            logger.debug('Response event from model: %s', event)
+            logger.info('Incoming Event: %s', json_data)
+
 
             # Handle completionStart — model is about to generate output
             # No ADK yield needed; just reset state for the new completion.
@@ -225,11 +223,10 @@ class NovaSonicLlmConnection(BaseLlmConnection):
                     candidates_token_count=usage.get("totalOutputTokens"),
                     total_token_count=usage.get("totalTokens"),
                 )
-                continue
                 # yield LlmResponse(
                 #     usage_metadata=usage_metadata,
                 # )
-                # continue
+                continue
 
             # contentStart events
             if "contentStart" in event:
@@ -272,25 +269,24 @@ class NovaSonicLlmConnection(BaseLlmConnection):
 
                 # TEXT/USER = input transcription (STT of what user said)
                 if content_role == "user":
-                    self._input_transcription_text += text_chunk
                     yield LlmResponse(
                         input_transcription=types.Transcription(
                             text=text_chunk,
-                            finished=False,
+                            finished=True,
                         ),
-                        partial=True,
+                        partial=False,
                     )
+                    yield LlmResponse(turn_complete=True)
                     continue
 
                 # TEXT/ASSISTANT = output transcription (text of what model is speaking)
                 if content_role == "model":
-                    self._output_transcription_text += text_chunk
                     yield LlmResponse(
                         output_transcription=types.Transcription(
                             text=text_chunk,
-                            finished=False,
+                            finished=True,
                         ),
-                        partial=True,
+                        partial=False,
                     )
                     continue
 
@@ -326,38 +322,12 @@ class NovaSonicLlmConnection(BaseLlmConnection):
                     'Content end: contentId=%s, type=%s, role=%s, stopReason=%s',
                     content_id, content_type, content_role, stop_reason,
                 )
-                
+
                 if content_type == "TEXT":
-                    # Flush input transcription for USER text
-                    if self._input_transcription_text:
-                        yield LlmResponse(
-                            input_transcription=types.Transcription(
-                                text=self._input_transcription_text,
-                                finished=True,
-                            ),
-                            partial=False,
-                        )
-                        self._input_transcription_text = ''
+                    if stop_reason == "END_TURN":
                         yield LlmResponse(turn_complete=True)
-                        continue
-
-
-                    # Flush output transcription for ASSISTANT text only at
-                    if self._output_transcription_text:
-                        yield LlmResponse(
-                            output_transcription=types.Transcription(
-                                text=self._output_transcription_text,
-                            finished=True,
-                            ),
-                            partial=False,
-                        )
-                        self._output_transcription_text = ''
-
-                if stop_reason == "END_TURN":
-                    yield LlmResponse(turn_complete=True)
-                elif stop_reason == "INTERRUPTED":
-                    yield LlmResponse(interrupted=True)
-
+                    elif stop_reason == "INTERRUPTED":
+                        yield LlmResponse(interrupted=True)
                 # Remove from active contents tracking
                 self._active_contents.pop(content_id, None)
                 continue
