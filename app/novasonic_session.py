@@ -170,18 +170,20 @@ class NovaSonicSession:
                 
                 # Hardcoded for FunctionTool only for now
                 # TBD: handle other tool types
-                tool = tool.function_declarations[0]
+                declarations = tool.function_declarations
+
+                for tool in declarations:
                 
-                tool_json = {
-                    "toolSpec": {
-                        "name": tool.name,
-                        "description": tool.description,
-                        "inputSchema": {
-                            "json": tool.parameters.model_dump_json(exclude_none=True),
-                        },
+                    tool_json = {
+                        "toolSpec": {
+                            "name": tool.name,
+                            "description": tool.description,
+                            "inputSchema": {
+                                "json": tool.parameters.model_dump_json(exclude_none=True),
+                            },
+                        }
                     }
-                }
-                tool_config.append(tool_json)
+                    tool_config.append(tool_json)
 
         if tool_config:
             prompt_body["toolUseOutputConfiguration"] = {"mediaType": "application/json"}

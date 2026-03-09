@@ -89,7 +89,7 @@ class NovaSonicLlmConnection(BaseLlmConnection):
             logger.debug('Sending history to live connection: %s', contents)
             for content in contents:
                 role = self.role_mapping.get(content.role)
-                text = ''.join(part.text for part in content.parts)
+                text = ''.join(part.text for part in content.parts if part.text)
                 if not text:
                     continue
                 
