@@ -18,7 +18,7 @@ from google.genai import types
 
 # Import agent after loading environment variables
 # pylint: disable=wrong-import-position
-from .weather_agent.agent import agent  # noqa: E402
+from .customer_support_agent.agent import agent  # noqa: E402
 
 # Configure logging — write to file for review
 _log_file = Path(__file__).parent.parent / "debug.log"
@@ -29,8 +29,8 @@ logging.basicConfig(
     filemode="w",          # overwrite each run so the file stays manageable
 )
 # App and ADK loggers at DEBUG
-logging.getLogger("app").setLevel(logging.DEBUG)
-logging.getLogger("google_adk").setLevel(logging.DEBUG)
+logging.getLogger("app").setLevel(logging.INFO)
+# logging.getLogger("google_adk").setLevel(logging.DEBUG)
 logger = logging.getLogger(__name__)
 logger.info("Logging to %s", _log_file)
 
